@@ -13,10 +13,12 @@ namespace sprc {
     // inline constexpr uint64_t    RING_MASK_B  = RING_SIZE_B - 1;
     inline constexpr uint64_t    CURSOR_FREE  = UINT64_MAX;
 
-    struct RawFrameData{
-      uint16_t length;
-      uint64_t arrival_ts;
-      uint8_t payload[8192]; //keeping 8Kb as coinbase payload can spike
+    struct RawFrameData {
+        uint64_t arrival_ts;       // wall-clock ns at frame receipt
+        uint16_t length;
+        uint8_t  source_id;        // encoder uses this to pick the right JSON parser (0=coinbase, 1=binance, ...)
+        uint8_t  _pad[5];
+        uint8_t  payload[8192];    // 8 KB — Coinbase level2 snapshots can spike
     };
 
     struct EncodedPktData{
