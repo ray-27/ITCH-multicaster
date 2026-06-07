@@ -16,6 +16,12 @@ list(APPEND CMAKE_PREFIX_PATH
 find_package(Boost REQUIRED)          # header-only: Beast + Asio
 find_package(OpenSSL REQUIRED)        # TLS for WSS
 
+include(FetchContent)
+FetchContent_Declare(simdjson
+    GIT_REPOSITORY https://github.com/simdjson/simdjson.git
+    GIT_TAG        v3.12.3)
+FetchContent_MakeAvailable(simdjson)
+
 # ── Shared interface target ───────────────────────────────────────────────────
 # Every binary in this repo links this to get include paths + compile flags.
 add_library(itch_common INTERFACE)
@@ -39,8 +45,9 @@ target_compile_options(itch_common INTERFACE
 add_executable(publisher
     src/main.cpp
     src/ingestor/ws_ingestor.cpp
+    src/encoder/itch_encoder.cpp
 )
-target_link_libraries(publisher PRIVATE itch_common)
+target_link_libraries(publisher PRIVATE itch_common simdjson)
 
 # ── SPSC ring unit test ───────────────────────────────────────────────────────
 add_executable(test_sprc
