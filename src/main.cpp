@@ -14,7 +14,7 @@ int main() {
     );
 
     ItchEncoder    encoder({ring_a.get()}, *ring_b);
-    UDPMulticaster sender(*ring_b, "239.1.1.1", 9000);
+    UDPMulticaster sender(*ring_b, "239.1.1.1", 9000, 19001, 19002);
 
     std::thread t1([&]{ coinbase.run(); });
     std::thread t2([&]{ encoder.run();  });
