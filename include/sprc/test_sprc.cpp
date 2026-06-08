@@ -28,7 +28,7 @@ using BigRingB  = sprc::Ring<sprc::EncodedPktData, sprc::RING_SIZE_B>;
 
 static sprc::EncodedPktData make_pkt(uint16_t len, uint64_t seq) {
     sprc::EncodedPktData d{};
-    d.lenght  = len;
+    d.length  = len;
     d.seq_num = seq;
     d.payload[0] = static_cast<uint8_t>(seq & 0xFF);
     return d;
@@ -85,7 +85,7 @@ static void test_single_roundtrip() {
     bool called = false;
     bool con_ok = ring->consume([&](const sprc::EncodedPktData& d) {
         called        = true;
-        CHECK(d.lenght  == 42, "  length field preserved");
+        CHECK(d.length  == 42, "  length field preserved");
         CHECK(d.seq_num == 7,  "  seq_num field preserved");
         CHECK(d.payload[0] == (7 & 0xFF), "  payload[0] preserved");
     });

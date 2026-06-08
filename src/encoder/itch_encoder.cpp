@@ -1,6 +1,7 @@
 #include "encoder/itch_encoder.hpp"
 #include "sprc/sprc.hpp"
 #include "itch/itch_types.hpp"
+#include "itch/mold_header.hpp"
 #include <cstring>
 #include <string_view>
 #include <vector>
@@ -54,9 +55,24 @@ void ItchEncoder::run() {
     }
 }
 
-void ItchEncoder::flush_slot(){
+void ItchEncoder::flush_slot() {
     if(msg_count_ == 0) return;
 
+    MoldHeader hdr{};
+    std::memset(hdr.session, '0', sizeof(hdr.session));
+    hdr.seq_num   = first_seq_;
+    hdr.msg_count = msg_count_;
+    std::memcpy(pending_slot_.payload, &hdr, MOLD_HEADER_SIZE);
+
+    pending_slot_.length = static_cast<uint16_t>(
+        write_cursor_ - pending_slot_.payload);
+
+    ring_b_.publish(pending_slot_);
+
+    write_cursor_  = pending_slot_.payload + MOLD_HEADER_SIZE;
+    msg_count_     = 0;
+    first_seq_     = 0;
+    last_flush_ns_ = now_ns();
 }
 
 void ItchEncoder::process_frame(const sprc::RawFrameData& frame) {
@@ -108,8 +124,9 @@ void ItchEncoder::parse_coinbase(std::string_view payload) {
 
                 std::memcpy(write_cursor_, &msg, sizeof(msg));
                 write_cursor_ += sizeof(msg);
+                uint64_t s = seq_.fetch_add(1, std::memory_order_relaxed);
+                if (msg_count_ == 0) first_seq_ = s;
                 msg_count_++;
-                seq_.fetch_add(1, std::memory_order_relaxed);
             }
         }
     } else if (channel == "l2_data") {
@@ -132,8 +149,9 @@ void ItchEncoder::parse_coinbase(std::string_view payload) {
                     // ... fill price, qty, symbol same as above
                     std::memcpy(write_cursor_, &msg, sizeof(msg));
                     write_cursor_ += sizeof(msg);
+                    uint64_t s = seq_.fetch_add(1, std::memory_order_relaxed);
+                    if (msg_count_ == 0) first_seq_ = s;
                     msg_count_++;
-                    seq_.fetch_add(1, std::memory_order_relaxed);
                 }
             }
         }

@@ -22,7 +22,7 @@ namespace sprc {
     };
 
     struct EncodedPktData{
-      uint16_t lenght;
+      uint16_t length;
       uint64_t seq_num;
       uint8_t payload[1472]; //Ethernet MTU 1500 minus 20 bytes IP header minus 8 bytes UDP header
     };
