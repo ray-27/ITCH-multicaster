@@ -46,6 +46,7 @@ add_executable(publisher
     src/main.cpp
     src/ingestor/ws_ingestor.cpp
     src/encoder/itch_encoder.cpp
+    src/multicast/udp_multicaster.cpp
 )
 target_link_libraries(publisher PRIVATE itch_common simdjson)
 

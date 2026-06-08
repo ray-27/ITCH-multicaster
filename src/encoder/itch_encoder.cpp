@@ -2,11 +2,19 @@
 #include "sprc/sprc.hpp"
 #include "itch/itch_types.hpp"
 #include "itch/mold_header.hpp"
+#include <arpa/inet.h>
 #include <cstring>
 #include <string_view>
 #include <vector>
 
 namespace {
+
+// ITCH 5.0 and MoldUDP64 are big-endian on the wire.
+// htons/htonl handle 16/32-bit; this handles 64-bit.
+inline uint64_t hton64(uint64_t v) {
+    return (static_cast<uint64_t>(htonl(static_cast<uint32_t>(v))) << 32)
+         | htonl(static_cast<uint32_t>(v >> 32));
+}
 
 // Parses "67432.15" directly to integer scaled by 1e8 (= 6743215000000).
 // Avoids floating-point entirely — no rounding error, faster than strtod.
@@ -60,8 +68,8 @@ void ItchEncoder::flush_slot() {
 
     MoldHeader hdr{};
     std::memset(hdr.session, '0', sizeof(hdr.session));
-    hdr.seq_num   = first_seq_;
-    hdr.msg_count = msg_count_;
+    hdr.seq_num   = hton64(first_seq_);
+    hdr.msg_count = htons(msg_count_);
     std::memcpy(pending_slot_.payload, &hdr, MOLD_HEADER_SIZE);
 
     pending_slot_.length = static_cast<uint16_t>(
@@ -115,9 +123,10 @@ void ItchEncoder::parse_coinbase(std::string_view payload) {
 
                 // fill ITCH struct and memcpy into pending_slot_
                 PriceTick msg{};
-                msg.price    = price_scaled;
-                msg.best_bid = bid_scaled;
-                msg.best_ask = ask_scaled;
+                msg.price     = hton64(price_scaled);
+                msg.best_bid  = hton64(bid_scaled);
+                msg.best_ask  = hton64(ask_scaled);
+                msg.timestamp = hton64(now_ns());
                 std::memset(msg.symbol, ' ', 8);
                 std::memcpy(msg.symbol, product_id.data(),
                             std::min(product_id.size(), std::size_t{8}));
@@ -131,6 +140,8 @@ void ItchEncoder::parse_coinbase(std::string_view payload) {
         }
     } else if (channel == "l2_data") {
         for (auto event : doc["events"].get_array()) {
+            std::string_view product_id;
+            event["product_id"].get(product_id);
             for (auto update : event["updates"].get_array()) {
                 std::string_view side_sv, price_sv, qty_sv;
                 update["side"].get(side_sv);
@@ -145,8 +156,13 @@ void ItchEncoder::parse_coinbase(std::string_view payload) {
                     // fill OrderDelete, memcpy into write_cursor_
                 } else {
                     AddOrder msg{};
-                    msg.side = (side_sv == "bid") ? 'B' : 'S';
-                    // ... fill price, qty, symbol same as above
+                    msg.order_ref = hton64(seq_.load(std::memory_order_relaxed));
+                    msg.side      = (side_sv == "bid") ? 'B' : 'S';
+                    msg.price     = hton64(parse_price(price_sv));
+                    msg.quantity  = htonl(static_cast<uint32_t>(parse_price(qty_sv) / 100'000'000ULL));
+                    std::memset(msg.symbol, ' ', 8);
+                    std::memcpy(msg.symbol, product_id.data(),
+                                std::min(product_id.size(), std::size_t{8}));
                     std::memcpy(write_cursor_, &msg, sizeof(msg));
                     write_cursor_ += sizeof(msg);
                     uint64_t s = seq_.fetch_add(1, std::memory_order_relaxed);
